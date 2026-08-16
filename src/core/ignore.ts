@@ -6,7 +6,8 @@ export default class Ignore {
   // `caseSensitive` selects the matcher's case behaviour, set from a config's
   // `caseSensitivePatterns` key. The `ignore` package defaults to
   // `ignorecase: true`, so upstream matches case-INSENSITIVELY — meaning a
-  // pattern written to target one spelling silently catches the other.
+  // pattern aimed at one capitalization silently catches the other, because to
+  // the matcher `C3/index.php` and `c3/index.php` are the same path.
   //
   // On a case-insensitive local filesystem syncing to a case-sensitive server,
   // that is exactly the pair a surgical pattern is trying to separate:

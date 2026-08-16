@@ -22,9 +22,10 @@ New per-config boolean, **default `false`** (upstream behaviour). When true, `ig
 `remoteExplorer.filesExclude` patterns are matched **case-sensitively**.
 
 **Why.** The `ignore` package defaults to `ignorecase: true`, and `src/core/ignore.ts`
-constructed it with no options — so upstream matches case-INSENSITIVELY. A pattern written
-to target one spelling therefore also catches the other, which is precisely the pair that
-matters on a case-insensitive local filesystem syncing to a case-sensitive server: a
+constructed it with no options — so upstream matches case-INSENSITIVELY. A pattern aimed at one
+capitalization therefore also catches the other, because to the matcher `C3/index.php` and
+`c3/index.php` are the same path — precisely the pair that matters on a case-insensitive
+local filesystem syncing to a case-sensitive server: a
 pattern meant to block a remote `C3/index.php` on DOWNLOAD also blocked the real local
 `c3/index.php` on UPLOAD. Silently — an ignored path returns early in `createFileHandler`,
 before the spinner and before any connection, so nothing transfers and nothing errors.

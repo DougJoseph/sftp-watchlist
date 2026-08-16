@@ -71,7 +71,7 @@
       },
       "caseSensitivePatterns": {
         "type": "boolean",
-        "description": "True to match `ignore` and `remoteExplorer.filesExclude` patterns CASE-SENSITIVELY. Default false, which is upstream behaviour: the ignore library matches case-insensitively, so a pattern targeting one spelling also catches the other. Set true when the remote filesystem is case-sensitive and two paths differ only by case. Affects pattern matching in every direction (upload, sync both ways, download) and the Remote Explorer; it does NOT change how local and remote filenames are compared during a sync.",
+        "description": "True to match `ignore` and `remoteExplorer.filesExclude` patterns CASE-SENSITIVELY. Default false, which is upstream behaviour: the ignore library matches case-insensitively, so a pattern aimed at one capitalization also catches the other, because to the matcher `C3/index.php` and `c3/index.php` are the same path. Set true when the remote filesystem is case-sensitive and two paths differ only by case. Affects pattern matching in every direction (upload, sync both ways, download) and the Remote Explorer; it does NOT change how local and remote filenames are compared during a sync.",
         "default": false
       },
       "transferLogKeepMonths": {
