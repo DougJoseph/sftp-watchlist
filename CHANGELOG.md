@@ -1,3 +1,92 @@
+# Fork: DougJoseph/vscode-sftp
+
+A private fork of Natizyskunk's SFTP extension, branched from release **1.16.3
+(2023-06-16)** and built only as a local `.vsix` — never published to the marketplace.
+Extension id `DougJoseph.sftp-watchlist`. Its purpose is two additions the upstream
+extension does not have: a hook that runs before an upload begins, and a persistent
+on-disk transfer log. Everything below the horizontal rule is upstream history.
+
+## Fork changes
+
+### 1.17.1 — 2026-08-16 — ssh2 1.13.0 → 1.17.0, fixing broken downloads
+
+Downloads and remote → local syncs failed on current VS Code with
+`TypeError: isDate is not a function`, thrown from `ssh2/lib/protocol/SFTP.js`
+`attrsToBytes`. ssh2 1.13.0 does `const { inherits, isDate } = require('util')`, and
+`util.isDate` — deprecated for years — has been removed from the Node build VS Code now
+ships. Uploads were unaffected, which is why it went unnoticed: the failing call is on the
+read path.
+
+**This was NOT introduced by the fork.** Verified by enabling the stock
+`Natizyskunk.sftp-1.16.3` and reproducing the identical error from its own copy of
+ssh2 1.13.0, at the same line. Both builds carried the same dependency and the same defect.
+
+ssh2 1.17.0 fixes it upstream — its line 10 reads
+`const { inherits, types: { isDate } } = require('util')`. The dependency range moves
+`^1.13.0` → `^1.17.0`; no fork code changes were needed.
+
+Note this raises the packaged size from 582 files / 1.16 MB to 804 files / 1.81 MB, ssh2
+1.17.0 having a larger dependency footprint.
+
+### 1.17.0 — 2026-08-15 — the two features
+
+* **`beforeUpload` — a shell command run to completion before any local-to-remote
+  transfer, aborting the transfer on a non-zero exit.** Configured per `sftp.json`, with
+  `beforeUploadTimeout` (default 120000 ms). The command runs with the config's local root
+  as its working directory and receives `SFTP_LOCAL_BASE`, `SFTP_REMOTE_PATH`, `SFTP_HOST`,
+  `SFTP_PROFILE`, `SFTP_TARGET_LOCAL`, `SFTP_TARGET_REMOTE` and `SFTP_OPERATION`, so one
+  script can serve several configs.
+  * Gated by a new `isUpload` flag set on exactly four handlers — `sync local ➞ remote`,
+    `upload`, `upload file`, `upload folder`. Downloads and `sync remote ➞ local` never
+    run it.
+  * **Fails closed**: it runs before the spinner and before any connection is opened, and
+    its rejection propagates, so a failure means nothing was transferred. A hook that
+    failed open would silently reintroduce the drift it exists to prevent.
+  * Runs **once per command, not once per file** — a folder upload recurses inside the
+    handler, below this point.
+* **A persistent on-disk transfer log.** Upstream logs only to the Output panel, which
+  clears, leaving no record of what went where. Every line the panel receives during an
+  operation is now also written to
+  `<config local root>/sftp-transfer-logs/sftp-transfer-YYYY-MM.log`.
+  * Monthly files rather than numbered rotation, so "what happened on 15 August" is a
+    filename. `transferLogKeepMonths` (default 24) prunes older ones; `transferLog: false`
+    disables it per config.
+  * Written per project: `createFileHandler` points the logger at the log belonging to the
+    config running the operation and releases it in a `finally`, so an aborted push cannot
+    leave a later operation writing into the wrong project's log.
+  * Lines emitted outside an operation — activation, config loads — belong to no project
+    and stay panel-only.
+  * The log lines carry a four-digit year, which the panel's own stamp omits.
+  * **Consuming projects must add `/sftp-transfer-logs` to the `ignore` list of every
+    `sftp.json`**, since the folder sits inside a synced tree and would otherwise upload
+    itself.
+
+Files touched: `src/logger.ts` (a settable sink beside the output channel),
+`src/modules/transferLog.ts` (new), `src/modules/beforeUpload.ts` (new),
+`src/fileHandlers/createFileHandler.ts` (both wired at the one point every file operation
+passes through), `src/fileHandlers/transfer/index.ts` (`isUpload` on four handlers),
+`src/core/fileService.ts` (four config fields), `schema/definitions.json` (so `sftp.json`
+accepts them without complaint).
+
+### 2026-08-15
+* Branched `watchlist` from tag `v1.16.3`. The `develop` branch was not used: it does not
+  compile (a missing import in `src/commands/abstract/createCommand.ts` and a `vscode-uri`
+  export mismatch in `src/helper/paths.ts`), and it carries unreleased changes that have no
+  place in a build that sits in a deploy path.
+* Identity changed so the marketplace cannot update over this build and so it is
+  distinguishable in the extensions list: `name` → `sftp-watchlist`, `publisher` →
+  `DougJoseph`, `displayName` → `SFTP (watchlist fork)`, with `repository`, `bugs` and
+  `homepage` pointed at this fork. The upstream maintainer's personal email was removed from
+  `bugs` and `author` so error reports from this build cannot be directed at him.
+* `author` retained as Natizyskunk, who wrote nearly all of this code; local additions are
+  recorded under `contributors`.
+* Command ids remain `sftp.*` and `jsonValidation` still matches `.vscode/sftp.json`, so
+  existing menus, keybindings and config files work unchanged.
+* `LICENSE.txt` deliberately untouched. The MIT terms and the original copyright notice
+  stand.
+
+---
+
 ## 1.16.3 - 2023-06-16
 * [#356] New Feature : Upload to all profiles (Pull request [#313](https://github.com/Natizyskunk/vscode-sftp/pull/313) from @wewawa vscode-sftp:create_multi_command).
 * [#357] Fix : Correcting Typo 'avaliable' => 'available' (Pull request [#343](https://github.com/Natizyskunk/vscode-sftp/pull/343) from @kjo-sdds vscode-sftp:develop).

@@ -55,6 +55,25 @@
         "description": "True to upload on every save operation of VS Code.",
         "default": false
       },
+      "beforeUpload": {
+        "type": "string",
+        "description": "Shell command run to completion BEFORE any upload or local-to-remote sync begins. A non-zero exit aborts the transfer. The command receives SFTP_LOCAL_BASE, SFTP_REMOTE_PATH, SFTP_HOST, SFTP_PROFILE, SFTP_TARGET_LOCAL, SFTP_TARGET_REMOTE and SFTP_OPERATION in its environment. Not run for downloads or remote-to-local sync."
+      },
+      "beforeUploadTimeout": {
+        "type": "number",
+        "description": "Milliseconds to allow beforeUpload before killing it and aborting the transfer.",
+        "default": 120000
+      },
+      "transferLog": {
+        "type": "boolean",
+        "description": "True to mirror this config's transfer output to sftp-transfer-logs/sftp-transfer-YYYY-MM.log inside the local folder this config governs.",
+        "default": true
+      },
+      "transferLogKeepMonths": {
+        "type": "number",
+        "description": "How many monthly transfer-log files to keep. Older ones are deleted.",
+        "default": 24
+      },
       "useTempFile": {
         "type": "boolean",
         "description": "True to upload temp file on every save operation of VS Code to avoid breaking a webpage when a user acceses it while the file is still being uploaded (is incomplete).",

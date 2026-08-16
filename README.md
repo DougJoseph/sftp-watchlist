@@ -1,3 +1,212 @@
+# SFTP (watchlist fork)
+
+**A fork of [Natizyskunk/vscode-sftp](https://github.com/Natizyskunk/vscode-sftp) by
+[@DougJoseph](https://github.com/DougJoseph), branched from release v1.16.3.** Not published
+to the VS Code marketplace — install the `.vsix` from
+[Releases](https://github.com/DougJoseph/vscode-sftp/releases).
+
+It adds three things to the upstream extension:
+
+1. **A fix for downloads failing with `isDate is not a function`** on current VS Code — see
+   immediately below. This one is likely why you are reading this.
+2. **`beforeUpload`** — a shell command run to completion before any local → remote
+   transfer, which aborts the transfer if it fails.
+3. **A persistent on-disk transfer log**, because the Output panel clears and takes the
+   record of what you pushed with it.
+
+Everything else is upstream's, unchanged. The original README follows below the fork
+documentation.
+
+---
+
+## Fixed: downloads fail with `TypeError: isDate is not a function`
+
+**Symptom.** Any download or remote → local sync fails. Uploads keep working, which is why
+this can go unnoticed for a long time. The stack looks like this:
+
+```
+TypeError: isDate is not a function
+    at attrsToBytes (…/node_modules/ssh2/lib/protocol/SFTP.js:2492:45)
+    at SFTP.open (…/node_modules/ssh2/lib/protocol/SFTP.js:331:15)
+    at ReadStream.open (…/node_modules/ssh2/lib/protocol/SFTP.js:3706:13)
+    at SFTP.createReadStream (…/node_modules/ssh2/lib/protocol/SFTP.js:305:12)
+```
+
+**Cause.** `ssh2` 1.13.0 — the version pinned by upstream v1.16.3 — begins `SFTP.js` with:
+
+```js
+const { inherits, isDate } = require('util');
+```
+
+`util.isDate` was deprecated years ago and has since been **removed** from the Node build
+that current VS Code ships. So `isDate` is `undefined`, and calling it throws. The failing
+call sits on the read path, which is why uploads are unaffected.
+
+**This affects the stock extension too.** It is not introduced by this fork. Verified by
+enabling `Natizyskunk.sftp` 1.16.3 and reproducing the identical error from its own copy of
+ssh2 1.13.0, at the same line.
+
+**The fix.** `ssh2` 1.17.0 corrects it upstream —
+
+```js
+const { inherits, types: { isDate } } = require('util');
+```
+
+— so this fork moves the dependency from `^1.13.0` to `^1.17.0`. No extension code needed
+changing. If you would rather stay on the stock extension, bumping ssh2 and rebuilding it
+yourself fixes it the same way.
+
+---
+
+## `beforeUpload`
+
+A shell command run to completion **before** any local → remote transfer begins. A non-zero
+exit **aborts the transfer**.
+
+```jsonc
+{
+  "beforeUpload": "./scripts/prepare-upload.sh",
+  "beforeUploadTimeout": 120000   // ms; default 120000
+}
+```
+
+- Runs for `upload`, `upload file`, `upload folder` and `sync local ➞ remote` **only**.
+  Downloads and `sync remote ➞ local` never trigger it.
+- Runs **once per command**, not once per file — a folder upload recurses below this point.
+- Runs before any connection is opened, so an abort means nothing was transferred.
+- **Fails closed**: a non-zero exit, a timeout, or a failure to spawn all abort the
+  transfer and surface the reason. This is deliberate — a hook that failed open would let a
+  push proceed without whatever the hook was supposed to produce.
+- Working directory is the local root of the config in use.
+
+The command receives these environment variables, so one script can serve several configs:
+
+| Variable | Meaning |
+|---|---|
+| `SFTP_LOCAL_BASE` | Local root of the config in use |
+| `SFTP_REMOTE_PATH` | That config's `remotePath` |
+| `SFTP_HOST` | Target host |
+| `SFTP_PROFILE` | Profile or context name, blank if the config has none |
+| `SFTP_TARGET_LOCAL` | The file or folder acted on, locally |
+| `SFTP_TARGET_REMOTE` | Its remote counterpart |
+| `SFTP_OPERATION` | Which handler fired, e.g. `upload file` |
+
+### Worked example
+
+**1. Write the script.** Anywhere you like; a relative path in `sftp.json` resolves against
+the config's local root, because that is the working directory the command runs in.
+
+`scripts/prepare-upload.sh`:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Whatever has to be true before files leave this machine. Exit non-zero to stop the push.
+echo "preparing $SFTP_OPERATION for profile '${SFTP_PROFILE:-none}'"
+echo "  local root : $SFTP_LOCAL_BASE"
+echo "  target     : $SFTP_TARGET_LOCAL"
+echo "  going to   : $SFTP_HOST:$SFTP_REMOTE_PATH"
+
+# e.g. generate a manifest of what is about to be sent
+# find "$SFTP_LOCAL_BASE" -type f -print0 | xargs -0 shasum -a 256 > /tmp/manifest.txt
+
+echo "ok"
+```
+
+**2. Make it executable.** A script without the executable bit fails to spawn, and because
+the hook fails closed that aborts *every* push from this config until it is fixed:
+
+```
+chmod +x scripts/prepare-upload.sh
+```
+
+**3. Point the config at it**, in that folder's `.vscode/sftp.json`:
+
+```jsonc
+{
+  "host": "example.com",
+  "remotePath": "/var/www/site",
+  "beforeUpload": "./scripts/prepare-upload.sh",
+  "beforeUploadTimeout": 120000
+}
+```
+
+**4. Reload the VS Code window.** The extension caches `sftp.json` at load, so an edit does
+not take effect until you do.
+
+**5. Confirm it is actually wired**, which takes about a minute:
+
+- Set `"beforeUpload": "echo hello"` and upload any file. The Output panel should show
+  `beforeUpload ➞ running …`, then `beforeUpload output: hello`, then `beforeUpload ✓ ok`
+  — all **before** the `local ➞ remote` line.
+- Then set `"beforeUpload": "exit 3"` and upload again. You should get an error naming
+  exit 3, and **no `local ➞ remote` line at all**. That absence is the proof it fails
+  closed.
+- Reload between each change, then put your real command back.
+
+## The transfer log
+
+Upstream logs only to the VS Code Output panel, which clears — so after a sync there is no
+record on disk of what went where. This fork writes the same lines to a monthly file inside
+the local folder the running config governs:
+
+```
+<config local root>/sftp-transfer-logs/sftp-transfer-YYYY-MM.log
+```
+
+```jsonc
+{
+  "transferLog": true,             // default true; false disables it for this config
+  "transferLogKeepMonths": 24      // older monthly files are deleted
+}
+```
+
+- Monthly files rather than numbered rotation, so "what happened on 15 August" is a
+  filename rather than a search.
+- Written per config, so each project's transfers land in that project's own log.
+- Log lines carry a four-digit year, which the Output panel's own stamp omits.
+- Lines emitted outside an operation — activation, config loading — belong to no project
+  and stay panel-only.
+
+**⚠️ Add `/sftp-transfer-logs` to the `ignore` list of every `sftp.json` that uses this.**
+The folder sits inside a synced tree, so without that entry it would upload itself.
+
+## Installing this fork
+
+1. Download the `.vsix` from
+   [Releases](https://github.com/DougJoseph/vscode-sftp/releases).
+2. `code --install-extension sftp-watchlist-<version>.vsix`
+3. **Disable the stock SFTP extension** if you have it — both register the same `sftp.*`
+   command ids, and having both enabled makes the second one to load fail every
+   registration. Disable rather than uninstall, so reverting is one click.
+4. Reload the window.
+
+Your existing `sftp.json` files work unchanged: the command ids, menus, keybindings and
+config schema are all the same as upstream.
+
+## Building from source
+
+```
+git clone https://github.com/DougJoseph/vscode-sftp.git
+cd vscode-sftp
+git checkout watchlist
+npm install
+npm run compile
+npx @vscode/vsce package
+```
+
+Two things worth knowing before you start:
+
+- **Branch from the release tag, not `develop`.** Upstream's `develop` does not compile —
+  it has a missing import in `src/commands/abstract/createCommand.ts` and a `vscode-uri`
+  export mismatch in `src/helper/paths.ts`. This fork branches from tag `v1.16.3`, which
+  builds clean.
+- The `package` script calls the legacy `vsce`, which is not a dependency here. Use
+  `npx @vscode/vsce package` as above.
+
+---
+
 # sftp sync extension for VS Code
 
 Maintained and updated version by [@Natizyskunk](https://github.com/Natizyskunk/) 😀 <br>

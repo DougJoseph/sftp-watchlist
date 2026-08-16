@@ -42,6 +42,8 @@ const downloadHandle = createTransferHandle(TransferDirection.REMOTE_TO_LOCAL);
 
 export const sync2Remote = createFileHandler<SyncOption>({
   name: 'sync local ➞ remote',
+  // FORK ADDITION (DougJoseph, 2026-08-15): gates the beforeUpload hook.
+  isUpload: true,
   async handle(option) {
     const remoteFs = await this.fileService.getRemoteFileSystem(this.config);
     const localFs = this.fileService.getLocalFileSystem();
@@ -120,6 +122,8 @@ export const sync2Local = createFileHandler<SyncOption>({
 
 export const upload = createFileHandler<TransferOption>({
   name: 'upload',
+  // FORK ADDITION (DougJoseph, 2026-08-15): gates the beforeUpload hook.
+  isUpload: true,
   handle: uploadHandle,
   transformOption() {
     const config = this.config;
@@ -138,6 +142,8 @@ export const upload = createFileHandler<TransferOption>({
 
 export const uploadFile = createFileHandler<TransferOption>({
   name: 'upload file',
+  // FORK ADDITION (DougJoseph, 2026-08-15): gates the beforeUpload hook.
+  isUpload: true,
   handle: uploadHandle,
   transformOption() {
     const config = this.config;
@@ -156,6 +162,8 @@ export const uploadFile = createFileHandler<TransferOption>({
 
 export const uploadFolder = createFileHandler<TransferOption>({
   name: 'upload folder',
+  // FORK ADDITION (DougJoseph, 2026-08-15): gates the beforeUpload hook.
+  isUpload: true,
   handle: uploadHandle,
   transformOption() {
     const config = this.config;

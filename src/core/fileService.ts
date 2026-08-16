@@ -37,6 +37,15 @@ interface ServiceOption {
   protocol: string;
   remote?: string;
   uploadOnSave: boolean;
+  // FORK ADDITION (DougJoseph, 2026-08-15): see CHANGELOG "Fork changes".
+  // Shell command run to completion before any local-to-remote transfer; a
+  // non-zero exit aborts the transfer. Downloads are unaffected.
+  beforeUpload?: string;
+  beforeUploadTimeout?: number;
+  // Mirror this config's transfer output to a monthly file inside the local
+  // folder the config governs, so a record survives the Output panel clearing.
+  transferLog?: boolean;
+  transferLogKeepMonths?: number;
   useTempFile: boolean;
   openSsh: boolean;
   downloadOnOpen: boolean | 'confirm';
