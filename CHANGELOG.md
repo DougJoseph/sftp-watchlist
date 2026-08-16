@@ -1,10 +1,13 @@
 # Fork: DougJoseph/vscode-sftp
 
-A private fork of Natizyskunk's SFTP extension, branched from release **1.16.3
-(2023-06-16)** and built only as a local `.vsix` — never published to the marketplace.
-Extension id `DougJoseph.sftp-watchlist`. Its purpose is two additions the upstream
-extension does not have: a hook that runs before an upload begins, and a persistent
-on-disk transfer log. Everything below the horizontal rule is upstream history.
+A personal fork of Natizyskunk's SFTP extension, branched from release **1.16.3
+(2023-06-16)** and distributed as a `.vsix` from this repository's Releases — never
+published to the VS Code marketplace. Extension id `DougJoseph.sftp-watchlist`.
+
+It differs from upstream in three ways: a hook that runs before an upload begins, a
+persistent on-disk transfer log, and a fix for downloads failing on current VS Code with
+`isDate is not a function` — a defect that affects the stock extension too. Everything
+below the horizontal rule is upstream history.
 
 ## Fork changes
 
