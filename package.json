@@ -2,7 +2,7 @@
   "name": "sftp-watchlist",
   "displayName": "SFTP (watchlist fork)",
   "description": "SFTP/FTP sync — local fork adding a pre-upload hook and an on-disk transfer log",
-  "version": "1.17.1",
+  "version": "1.18.0",
   "publisher": "DougJoseph",
   "author": "Natizyskunk (https://github.com/Natizyskunk)",
   "contributors": [

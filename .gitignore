@@ -35,3 +35,6 @@ bower_components
 .bower-cache
 .bower-registry
 .bower-tmp
+
+# Reflowed release-note text for pasting into GitHub releases; not part of the extension.
+release-notes-*.txt

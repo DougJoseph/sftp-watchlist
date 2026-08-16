@@ -46,6 +46,10 @@ interface ServiceOption {
   // folder the config governs, so a record survives the Output panel clearing.
   transferLog?: boolean;
   transferLogKeepMonths?: number;
+  // FORK ADDITION (DougJoseph, 2026-08-16): match `ignore` and
+  // `remoteExplorer.filesExclude` patterns case-sensitively. Default false =
+  // upstream behaviour (the `ignore` package defaults to case-insensitive).
+  caseSensitivePatterns?: boolean;
   useTempFile: boolean;
   openSsh: boolean;
   downloadOnOpen: boolean | 'confirm';
@@ -606,7 +610,7 @@ export default class FileService {
       return null;
     }
 
-    const ignore = Ignore.from(ignoreConfig);
+    const ignore = Ignore.from(ignoreConfig, config.caseSensitivePatterns === true);
     const ignoreFunc = fsPath => {
       // vscode will always return path with / as separator
       const normalizedPath = path.normalize(fsPath);

@@ -11,6 +11,31 @@ below the horizontal rule is upstream history.
 
 ## Fork changes
 
+### 1.18.0 — 2026-08-16 — `caseSensitivePatterns`
+
+New per-config boolean, **default `false`** (upstream behaviour). When true, `ignore` and
+`remoteExplorer.filesExclude` patterns are matched **case-sensitively**.
+
+**Why.** The `ignore` package defaults to `ignorecase: true`, and `src/core/ignore.ts`
+constructed it with no options — so upstream matches case-INSENSITIVELY. A pattern written
+to target one spelling therefore also catches the other, which is precisely the pair that
+matters on a case-insensitive local filesystem syncing to a case-sensitive server: a
+pattern meant to block a remote `C3/index.php` on DOWNLOAD also blocked the real local
+`c3/index.php` on UPLOAD. Silently — an ignored path returns early in `createFileHandler`,
+before the spinner and before any connection, so nothing transfers and nothing errors.
+
+**Scope — pattern matching only.** `Ignore` is the extension's only pattern matcher and has
+two consumers, both now honouring the flag: the transfer `ignore` list (which applies to
+upload, folder upload, sync in both directions, and download alike) and
+`remoteExplorer.filesExclude`. It does NOT change how local and remote filenames are
+compared to each other during a sync, and it does not affect the local filesystem's own
+case behaviour. The name says `Patterns` for exactly that reason — a bare `caseSensitive`
+would promise more than it delivers.
+
+Files touched: `src/core/ignore.ts` (the flag), `src/core/fileService.ts` (the config field
+plus the transfer-ignore construction), `src/modules/remoteExplorer/treeDataProvider.ts`
+(the Remote Explorer construction), `schema/definitions.json`.
+
 ### 1.17.1 — 2026-08-16 — ssh2 1.13.0 → 1.17.0, fixing broken downloads
 
 Downloads and remote → local syncs failed on current VS Code with

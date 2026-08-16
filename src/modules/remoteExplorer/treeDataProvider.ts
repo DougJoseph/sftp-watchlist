@@ -148,7 +148,8 @@ export default class RemoteTreeData
         ? config.remoteExplorer.filesExclude.concat(DEFAULT_FILES_EXCLUDE)
         : DEFAULT_FILES_EXCLUDE;
 
-    const ignore = new Ignore(filesExcludeList);
+    // FORK ADDITION (DougJoseph, 2026-08-16): honour caseSensitivePatterns here too.
+    const ignore = new Ignore(filesExcludeList, (config as any).caseSensitivePatterns === true);
     function filterFile(file: FileEntry) {
       const relativePath = upath.relative(config.remotePath, file.fspath);
       return !ignore.ignores(relativePath);
