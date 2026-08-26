@@ -1,4 +1,4 @@
-# Fork: DougJoseph/vscode-sftp
+# Fork: DougJoseph/sftp-watchlist
 
 A personal fork of Natizyskunk's SFTP extension, branched from release **1.16.3
 (2023-06-16)** and distributed as a `.vsix` from this repository's Releases — never

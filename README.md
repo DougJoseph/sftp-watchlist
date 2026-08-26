@@ -1,9 +1,13 @@
 # SFTP (watchlist fork)
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/DougJoseph/sftp-watchlist/watchlist/resources/icon.png" width="128" alt="SFTP (watchlist fork)" />
+</p>
+
 **A fork of [Natizyskunk/vscode-sftp](https://github.com/Natizyskunk/vscode-sftp) by
-[@DougJoseph](https://github.com/DougJoseph), branched from release v1.16.3.** Not published
-to the VS Code marketplace — install the `.vsix` from
-[Releases](https://github.com/DougJoseph/vscode-sftp/releases).
+[@DougJoseph](https://github.com/DougJoseph), branched from release v1.16.3.** Published on
+the **VS Code Marketplace** as `DougJoseph.sftp-watchlist` — or install the `.vsix` from
+[Releases](https://github.com/DougJoseph/sftp-watchlist/releases).
 
 It adds three things to the upstream extension:
 
@@ -175,7 +179,7 @@ The folder sits inside a synced tree, so without that entry it would upload itse
 ## Installing this fork
 
 1. Download the `.vsix` from
-   [Releases](https://github.com/DougJoseph/vscode-sftp/releases).
+   [Releases](https://github.com/DougJoseph/sftp-watchlist/releases).
 2. `code --install-extension sftp-watchlist-<version>.vsix`
 3. **Disable the stock SFTP extension** if you have it — both register the same `sftp.*`
    command ids, and having both enabled makes the second one to load fail every
@@ -188,8 +192,8 @@ config schema are all the same as upstream.
 ## Building from source
 
 ```
-git clone https://github.com/DougJoseph/vscode-sftp.git
-cd vscode-sftp
+git clone https://github.com/DougJoseph/sftp-watchlist.git
+cd sftp-watchlist
 git checkout watchlist
 npm install
 npm run compile
