@@ -60,6 +60,7 @@ const configScheme = {
     update: Joi.boolean(),
   },
   remoteTimeOffsetInHours: Joi.number(),
+  hopKeysLocal: Joi.boolean(),
 
   remoteExplorer: {
     filesExclude: Joi.array()

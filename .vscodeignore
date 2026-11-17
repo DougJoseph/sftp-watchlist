@@ -1,11 +1,16 @@
 *
 */**
-**/.DS_Store
-!node_modules/**/*
+# vsce already ignores **/.DS_Store, but a `!` pattern overrides every ignore
+# regardless of order, so each re-include has to exclude it itself. The
+# alternation is what makes that work: vsce appends a "/**" folder variant to
+# any pattern whose last segment holds no "*", and that variant matches the
+# very files the pattern just excluded. Putting a "*" in the last segment
+# stops the variant from being created.
+!node_modules/**/!(.DS_Store|*.DS_Store)
 !dist/extension.js
 !package.json
 !README.md
 !CHANGELOG.md
 !LICENSE
-!resources/**/*
+!resources/**/!(.DS_Store|*.DS_Store)
 !schema/**/*

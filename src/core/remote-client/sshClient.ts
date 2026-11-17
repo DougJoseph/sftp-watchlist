@@ -36,7 +36,9 @@ export default class SSHClient extends RemoteClient {
     connectOption: ConnectOption,
     config: Config
   ): Promise<void> {
-    const { hop, ...option } = connectOption;
+    // FORK ADDITION: hopKeysLocal reads every hop's key file from this machine.
+    // Default false = upstream behaviour (a hop's key is read from the previous server).
+    const { hop, hopKeysLocal, ...option } = connectOption;
 
     let lastOption: ConnectOption = option;
     let fs: FileSystem | RemoteFileSystem = localFs;
@@ -65,7 +67,8 @@ export default class SSHClient extends RemoteClient {
         }
 
         if (curOpt.privateKeyPath) {
-          const buffer = await fs.readFile(curOpt.privateKeyPath);
+          const keyFs = hopKeysLocal === true ? localFs : fs;
+          const buffer = await keyFs.readFile(curOpt.privateKeyPath);
           curOpt.privateKey = buffer.toString();
         }
 
@@ -86,7 +89,8 @@ export default class SSHClient extends RemoteClient {
     }
 
     if (lastOption.privateKeyPath) {
-      const buffer = await fs.readFile(lastOption.privateKeyPath);
+      const keyFs = hopKeysLocal === true ? localFs : fs;
+      const buffer = await keyFs.readFile(lastOption.privateKeyPath);
       lastOption.privateKey = buffer.toString();
     }
 

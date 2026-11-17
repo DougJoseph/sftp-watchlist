@@ -50,6 +50,9 @@ interface ServiceOption {
   // `remoteExplorer.filesExclude` patterns case-sensitively. Default false =
   // upstream behaviour (the `ignore` package defaults to case-insensitive).
   caseSensitivePatterns?: boolean;
+  // FORK ADDITION: read every `hop` entry's privateKeyPath from this machine.
+  // Default false = upstream behaviour (read from the previous server in the chain).
+  hopKeysLocal?: boolean;
   useTempFile: boolean;
   openSsh: boolean;
   downloadOnOpen: boolean | 'confirm';

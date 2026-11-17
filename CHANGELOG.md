@@ -4,17 +4,62 @@ A fork of Natizyskunk's SFTP extension, branched from release **1.16.3
 (2023-06-16)** and distributed as a `.vsix` from this repository's Releases and on the
 VS Code Marketplace. Extension id `DougJoseph.sftp-watchlist`.
 
-It differs from upstream in four ways:
+It differs from upstream in five ways:
 
 - a hook that runs before an upload begins,
 - a persistent on-disk transfer log,
 - `caseSensitivePatterns`, an opt-in that matches ignore/exclude patterns case-sensitively,
+- `hopKeysLocal`, an opt-in that reads every hop's private key from the local machine,
 - a fix for downloads failing on current VS Code with `isDate is not a function` — a defect
   that affects the stock extension too.
 
 Everything below the horizontal rule is upstream history.
 
 ## Fork changes
+
+### 1.19.0 — 2026-11-17 — `hopKeysLocal`, and no `.DS_Store` in the package
+
+* **`hopKeysLocal` — a per-config boolean, default `false` (upstream behaviour), that reads
+  the `privateKeyPath` of every `hop` entry from the local machine.** Set it at the top
+  level of a config; one setting covers every hop in the chain.
+  * **Why hop at all.** Hopping is for a destination that will not take your connection, or
+    should never see it: one that accepts only an allowlisted or static address, one behind
+    a bastion on a private network, an address that intrusion-prevention software on the far
+    end has counted and blocked, a network that blocks outbound port 22. Upstream already
+    supports it.
+  * **What this changes.** Upstream reads each hop's key file through the connection to the
+    previous server, so reaching the destination means first copying the **destination's**
+    own private key onto the intermediary — a rented VPS, a cloud instance, a shared
+    bastion, a machine you may not own and cannot vouch for. For a lot of setups that is not
+    a trade-off but a reason not to hop at all. With `hopKeysLocal: true` every key file is
+    read locally; the intermediary forwards the connection and holds a key to nothing beyond
+    itself. Authentication to the destination still happens end to end over the forwarded
+    connection.
+  * **Compatibility.** Configs without the setting behave exactly as before, so existing hop
+    configs that keep their keys on the intermediary are unaffected. Config validation
+    allows unknown keys, so an older build accepts `hopKeysLocal` and **silently ignores
+    it** — a config written for this setting then looks for the destination's key on the
+    intermediary and fails there.
+  * Use an absolute path for each hop's `privateKeyPath`; `~` is not expanded inside `hop`.
+* **Packaging: `.DS_Store` files no longer ship.** Earlier packages carried nine of them —
+  `resources/.DS_Store` and eight under `node_modules/`. `vsce` already ignores
+  `**/.DS_Store` by default, but it keeps any file a `!` pattern matches regardless of the
+  ignore patterns or their order, so `!node_modules/**/*` and `!resources/**/*` were putting
+  them back. Each re-include in `.vscodeignore` now excludes the file itself, written as an
+  alternation carrying a `*` in the last path segment: `vsce` appends a `/**` folder variant
+  to any pattern whose last segment holds no `*`, and that variant matches the very files
+  the pattern just excluded. The package goes from 813 files to 804.
+* **The README — which is the Marketplace listing — now leads with what each addition does
+  for you rather than how it works**, and every optional setting has a worked example:
+  `beforeUpload` rebuilding a checksum manifest, `caseSensitivePatterns` with the two
+  colliding `ignore` patterns in place, `hopKeysLocal` with a full hop config and the
+  `hopping from … to …` line that verifies it, and the transfer log with real log lines and
+  the one `grep` that answers what went up when.
+
+Files touched: `src/core/remote-client/sshClient.ts` (the key reads in `_doConnect`),
+`src/core/remote-client/remoteClient.ts` and `src/core/fileService.ts` (the option's type),
+`src/modules/config.ts` (the config schema), `schema/definitions.json`, `.vscodeignore`,
+`README.md`.
 
 ### 1.18.0 — 2026-08-16 — `caseSensitivePatterns`
 

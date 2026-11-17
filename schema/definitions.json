@@ -74,6 +74,11 @@
         "description": "True to match `ignore` and `remoteExplorer.filesExclude` patterns CASE-SENSITIVELY. Default false, which is upstream behaviour: the ignore library matches case-insensitively, so a pattern aimed at one capitalization also catches the other, because to the matcher `C3/index.php` and `c3/index.php` are the same path. Set true when the remote filesystem is case-sensitive and two paths differ only by case. Affects pattern matching in every direction (upload, sync both ways, download) and the Remote Explorer; it does NOT change how local and remote filenames are compared during a sync.",
         "default": false
       },
+      "hopKeysLocal": {
+        "type": "boolean",
+        "description": "True to read every `hop` entry's `privateKeyPath` from this machine. Default false, which is upstream behaviour: a hop's key file is read from the previous server in the chain, so the target's private key must be stored on the jump host. Set true to keep every private key on this machine only.",
+        "default": false
+      },
       "transferLogKeepMonths": {
         "type": "number",
         "description": "How many monthly transfer-log files to keep. Older ones are deleted.",

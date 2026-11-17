@@ -9,24 +9,38 @@
 the **VS Code Marketplace** as `DougJoseph.sftp-watchlist` — or install the `.vsix` from
 [Releases](https://github.com/DougJoseph/sftp-watchlist/releases).
 
-It adds three things to the upstream extension:
+It adds five things to the upstream extension:
 
-1. **A fix for downloads failing with `isDate is not a function`** on current VS Code — see
-   immediately below. This one is likely why you are reading this.
-2. **`beforeUpload`** — a shell command run to completion before any local → remote
-   transfer, which aborts the transfer if it fails.
-3. **A persistent on-disk transfer log**, because the Output panel clears and takes the
-   record of what you pushed with it.
+1. **Fixes downloads, which are broken in the stock extension.** On current VS Code every
+   download and remote → local sync fails there with `isDate is not a function`. Here they
+   work, and there is nothing to configure — see immediately below. This is likely why you
+   are reading this.
+2. **Runs a command of yours before every push, and stops the push if it fails.** It fires
+   automatically on every upload and sync, before the first byte leaves, so whatever has to
+   accompany a push gets made — a rebuilt manifest, a fresh build — and a push that should
+   not happen gets refused outright. `beforeUpload`, optional; leave it out and nothing
+   changes.
+3. **Keeps an `ignore` pattern from silently blocking a path that differs from it only in
+   capitalization.** To the matcher `C3/` and `c3/` are the same path, so a rule meant for
+   one quietly stops the other from ever uploading — no transfer, no error.
+   `caseSensitivePatterns`, optional, default `false`.
+4. **Connects through an intermediary without that intermediary ever holding the
+   destination's private key.** For when the destination will not accept your address — or
+   you would rather it never saw your address at all. `hopKeysLocal`, optional, default
+   `false`.
+5. **Writes a permanent record of every transfer.** The Output panel clears and takes the
+   history with it; the same lines also go to a monthly file in the project, so "what went
+   to that server in August, and when" is still answerable months later.
 
 Everything else is upstream's, unchanged. The original README follows below the fork
 documentation.
 
 ---
 
-## Fixed: downloads fail with `TypeError: isDate is not a function`
+## The download fix — the stock extension's `isDate is not a function`
 
-**Symptom.** Any download or remote → local sync fails. Uploads keep working, which is why
-this can go unnoticed for a long time. The stack looks like this:
+**Symptom.** On the stock extension, any download or remote → local sync fails. Uploads keep
+working, which is why this can go unnoticed for a long time. The stack looks like this:
 
 ```
 TypeError: isDate is not a function
@@ -60,12 +74,28 @@ const { inherits, types: { isDate } } = require('util');
 changing. If you would rather stay on the stock extension, bumping ssh2 and rebuilding it
 yourself fixes it the same way.
 
+**Nothing to configure.** Installing this fork is the whole fix; there is no setting to turn
+on and no change to your `sftp.json`.
+
 ---
 
 ## `beforeUpload`
 
-A shell command run to completion **before** any local → remote transfer begins. A non-zero
-exit **aborts the transfer**.
+Runs a shell command of yours to completion **before** any local → remote transfer begins,
+and **aborts the transfer** if that command exits non-zero. Optional: with no `beforeUpload`
+set, nothing runs and uploads behave exactly as upstream.
+
+**What it gets you.** The moment before a push is the last chance to get something right, and
+the only moment at which stopping costs nothing. Three uses:
+
+- **A list on the server that always matches what was sent.** Where the far end reads a list
+  of your files — a checksum manifest, a file-integrity watchlist, a deployment inventory —
+  the hook rebuilds that list from the tree being pushed, so the list and the files cannot
+  drift apart. If the rebuild fails, the push does not happen.
+- **Never a stale build on the server.** The hook runs the build or the bundler, so the
+  compiled files that land always came from the source that travelled with them.
+- **A push that refuses itself.** The hook inspects the tree and exits non-zero — an `.env`,
+  a key, a database dump, a failing test suite — and nothing transfers.
 
 ```jsonc
 {
@@ -76,7 +106,8 @@ exit **aborts the transfer**.
 
 - Runs for `upload`, `upload file`, `upload folder` and `sync local ➞ remote` **only**.
   Downloads and `sync remote ➞ local` never trigger it.
-- Runs **once per command**, not once per file — a folder upload recurses below this point.
+- Runs **once per command**, not once per file: a folder upload runs the hook once, then
+  transfers every file beneath it.
 - Runs before any connection is opened, so an abort means nothing was transferred.
 - **Fails closed**: a non-zero exit, a timeout, or a failure to spawn all abort the
   transfer and surface the reason. This is deliberate — a hook that failed open would let a
@@ -100,23 +131,30 @@ The command receives these environment variables, so one script can serve severa
 **1. Write the script.** Anywhere you like; a relative path in `sftp.json` resolves against
 the config's local root, because that is the working directory the command runs in.
 
-`scripts/prepare-upload.sh`:
+`scripts/prepare-upload.sh` — regenerate a checksum manifest of the tree about to be pushed,
+so whatever reads it on the far end describes the files that actually went:
 
 ```bash
 #!/bin/bash
 set -euo pipefail
 
-# Whatever has to be true before files leave this machine. Exit non-zero to stop the push.
-echo "preparing $SFTP_OPERATION for profile '${SFTP_PROFILE:-none}'"
-echo "  local root : $SFTP_LOCAL_BASE"
-echo "  target     : $SFTP_TARGET_LOCAL"
-echo "  going to   : $SFTP_HOST:$SFTP_REMOTE_PATH"
+cd "$SFTP_LOCAL_BASE"
 
-# e.g. generate a manifest of what is about to be sent
-# find "$SFTP_LOCAL_BASE" -type f -print0 | xargs -0 shasum -a 256 > /tmp/manifest.txt
+find . -type f \
+     ! -path './.git/*' \
+     ! -path './.vscode/*' \
+     ! -path './sftp-transfer-logs/*' \
+     ! -name 'manifest.sha256' \
+     -print0 \
+  | sort -z \
+  | xargs -0 shasum -a 256 > manifest.sha256
 
-echo "ok"
+echo "manifest: $(wc -l < manifest.sha256) files for $SFTP_OPERATION ➞ $SFTP_HOST:$SFTP_REMOTE_PATH"
 ```
+
+Because the hook runs **before** the transfer, a folder upload or `sync local ➞ remote`
+carries the freshly written `manifest.sha256` along with the files it describes. A single-file
+upload does not — push the folder when the manifest has to match.
 
 **2. Make it executable.** A script without the executable bit fails to spawn, and because
 the hook fails closed that aborts *every* push from this config until it is fixed:
@@ -149,6 +187,223 @@ not take effect until you do.
   closed.
 - Reload between each change, then put your real command back.
 
+---
+
+## `caseSensitivePatterns`
+
+```jsonc
+{
+  "caseSensitivePatterns": true   // default: false (upstream behavior)
+}
+```
+
+Matches `ignore` and `remoteExplorer.filesExclude` patterns **case-sensitively**. It governs
+pattern matching only — the `ignore` list in every direction, plus the Remote Explorer — and
+does not change how local and remote filenames are compared during a sync.
+
+**Why it exists.** The matcher is built from the npm
+[`ignore`](https://www.npmjs.com/package/ignore) package, which defaults to
+`ignorecase: true`, and upstream never overrides it. So to the matcher `C3/index.php` and
+`c3/index.php` are the same path, and a pattern written for one capitalization silently
+catches the other.
+
+**When you need it.** On a case-insensitive filesystem (macOS, Windows) syncing to a
+case-sensitive one (Linux), where the remote holds two paths differing only in case. A
+pattern meant to block the remote `C3/index.php` on **download** will also block the real
+local `c3/index.php` on **upload**.
+
+**The symptom is silence.** An ignored path returns early, before the progress indicator and
+before any connection is opened, so nothing transfers, nothing errors, and the Output panel
+shows no `local ➞ remote` line for that file. A file can appear to push for weeks without
+ever leaving the machine. If a file you edit never changes on the server and no error
+appears, check your `ignore` list for a pattern that differs from it only in case.
+
+Set it to `true` in any config whose `ignore` list contains two patterns differing only by
+case. It is per config, so a project with several `sftp.json` files sets it in each one that
+needs it.
+
+### Worked example
+
+A remote tree holds both `C3/` and `c3/`. `C3/` is generated on the server and must never be
+overwritten from here; `c3/` is yours and has to push. Without the flag the first pattern
+silences both:
+
+```jsonc
+{
+  "host": "example.com",
+  "remotePath": "/var/www/site",
+
+  "caseSensitivePatterns": true,
+
+  "ignore": [
+    ".git",
+    ".vscode",
+    "/sftp-transfer-logs",
+    "/C3"              // generated on the server — never push over it.
+                       // Without caseSensitivePatterns this also silences /c3.
+  ]
+}
+```
+
+Reload the VS Code window, then upload a file inside `c3/` and look for its `local ➞ remote`
+line in the Output panel. Its presence is the whole test — before the flag there was no line,
+and no error either.
+
+## `hopKeysLocal`
+
+```jsonc
+{
+  "hopKeysLocal": true   // default: false (upstream behavior)
+}
+```
+
+Reads every `hop` entry's `privateKeyPath` from **this machine** instead of from the previous
+server in the chain. Set it at the top level of the config; one setting covers every hop in
+the chain. Configs without it behave exactly as upstream.
+
+### Why hop at all
+
+Hopping — connecting to one machine and going on from there to a second — is upstream's
+feature, documented under [Connection Hopping](#connection-hopping) below. You reach for it
+when you cannot connect to the destination directly, or when you would rather it never saw
+you directly in the first place.
+
+- **It will not accept you.** The destination only accepts connections from an allowlisted or
+  static address and yours is neither; it sits on a private network reachable only through a
+  bastion; your office or ISP blocks outbound port 22.
+- **Keeping your own address clean.** A sync tool is not a person typing `ssh` a few times a
+  day. Upload-on-save, a file watcher, a pre-upload hook and scripted pushes open connections
+  in volume, and intrusion-prevention software on the far end counts connections and failed
+  attempts per source address and then blocks the source. With an intermediary in the path
+  the address being counted is the intermediary's — a machine that exists for exactly that
+  and can be thrown away and replaced. Your own address never accumulates a reputation with
+  the host, because the host never sees it.
+- **Getting back in after you have already been blocked.** A block lives at the destination,
+  which means you cannot connect in order to lift it. Changing your own address is often not
+  practical: a residential connection can hold the same lease for months, a static business
+  address is the thing you are paying for, and an office puts everyone behind one address —
+  so a block on it stops your colleagues too, and their traffic can get you blocked. A hop
+  gets you working again the same day and touches nothing of your own.
+- **Not having to ask.** An unblock is a favor, and asking for a second or a third one is how
+  an account starts being remembered as a problem. Hopping is a fix entirely on your side of
+  the connection: nothing to request, nothing to explain, no goodwill spent.
+
+### What `hopKeysLocal` gets you
+
+It removes the one requirement that makes `hop` unusable for a lot of people: upstream needs
+the destination's private key to be sitting on the intermediary.
+
+Upstream reads each hop's `privateKeyPath` from the **previous server in the chain**. So to
+reach your destination you must first copy the **destination's own private key onto the
+intermediary** — a rented VPS, a cloud instance, a shared company bastion, a machine you may
+not own and cannot vouch for. For a lot of setups that is not a trade-off but a wall: policy
+forbids it, or you simply will not put the key to your production server on a box like that.
+
+With `hopKeysLocal: true` every key file is read from your own machine. The intermediary
+forwards the connection and holds a key to nothing beyond itself. Authentication to the
+destination still happens end to end over the forwarded connection, so the intermediary never
+sees a credential for the far end.
+
+### Worked example
+
+Local machine ➞ intermediary ➞ destination, with both keys held locally.
+
+**1. Write the config** in `.vscode/sftp.json`. The **top level is the intermediary** and
+`hop` is the **destination** — the opposite of how it reads at a glance — and `remotePath`
+belongs to the destination:
+
+```jsonc
+{
+  "name": "site",
+  "remotePath": "/var/www/site",        // a path on the DESTINATION
+
+  // the intermediary — the machine the destination will accept
+  "host": "jump.example.net",
+  "username": "jumpuser",
+  "privateKeyPath": "/Users/me/.ssh/id_jump",
+
+  "hopKeysLocal": true,
+
+  "hop": {
+    // the destination
+    "host": "203.0.113.10",
+    "username": "siteuser",
+    "privateKeyPath": "/Users/me/.ssh/id_site"   // read from THIS machine
+  },
+
+  "uploadOnSave": false
+}
+```
+
+Two things that bite:
+
+- **Absolute paths only inside `hop`.** `~` is not expanded there, so `~/.ssh/id_site` fails
+  to read. This is upstream behavior and the setting does not change it.
+- **`hopKeysLocal` goes at the top level, not inside `hop`.** It is read once and applies to
+  the whole chain.
+
+**2. Reload the VS Code window.** The extension caches `sftp.json` at load, so an edit does
+not take effect until you do.
+
+**3. Upload any file and read the Output panel** (`View > Output`, channel `sftp`). A working
+hop logs the forward before the transfer:
+
+```
+[info] hopping from jump.example.net to 203.0.113.10
+[info] local ➞ remote /Users/me/site/index.php
+```
+
+That first line is the proof the connection went the long way round. If the transfer lines
+appear without it, the config is being read as a direct connection and your own address is
+what the destination is seeing.
+
+**Telling which mode is in force.** With `hopKeysLocal: true`, a wrong or unreadable `hop`
+key fails as a local read and the error carries a path on your own machine. Without it, the
+same mistake fails on the intermediary instead. That is the quickest way to confirm the
+setting is being honored.
+
+### Requires 1.19.0 or later — older builds ignore it silently
+
+Config validation allows unknown keys, so an older build of this fork — or the stock
+extension — accepts `hopKeysLocal` without complaint and goes on reading each hop's key from
+the previous server. **Nothing warns you.** A config written for this setting then looks for
+the destination's key on the intermediary, does not find it, and fails there. If a hop config
+fails that way, check the installed version before anything else.
+
+### Multiple hops
+
+`hop` also takes an array, and one `hopKeysLocal` covers every entry in it — every key below
+is read locally:
+
+```jsonc
+{
+  "name": "target",
+  "remotePath": "/path/on/target",
+
+  // first intermediary
+  "host": "hopA.example.net",
+  "username": "hopauser",
+  "privateKeyPath": "/Users/me/.ssh/id_hopa",
+
+  "hopKeysLocal": true,
+
+  "hop": [
+    // second intermediary
+    {
+      "host": "hopB.example.net",
+      "username": "hopbuser",
+      "privateKeyPath": "/Users/me/.ssh/id_hopb"
+    },
+    // the destination
+    {
+      "host": "203.0.113.10",
+      "username": "targetuser",
+      "privateKeyPath": "/Users/me/.ssh/id_target"
+    }
+  ]
+}
+```
+
 ## The transfer log
 
 Upstream logs only to the VS Code Output panel, which clears — so after a sync there is no
@@ -175,6 +430,30 @@ the local folder the running config governs:
 
 **⚠️ Add `/sftp-transfer-logs` to the `ignore` list of every `sftp.json` that uses this.**
 The folder sits inside a synced tree, so without that entry it would upload itself.
+
+### Reading the log
+
+The question it answers is *what went to that server, and when* — asked months later, after
+the Output panel has been cleared a hundred times. The file holds the panel's own lines, each
+stamped with the full year:
+
+```
+[2026-10-29 04:23:11] [info] beforeUpload ➞ running for sync local ➞ remote: ./scripts/prepare-upload.sh
+[2026-10-29 04:23:12] [info] beforeUpload output: manifest: 318 files for sync local ➞ remote ➞ example.com:/var/www/site
+[2026-10-29 04:23:12] [info] beforeUpload ✓ ok
+[2026-10-29 04:23:14] [info] local ➞ remote /Users/me/site/index.php
+[2026-10-29 04:23:14] [info] local ➞ remote /Users/me/site/css/app.css
+```
+
+So "did `index.php` go up on 29 October, and did the hook run before it?" is one command
+against one file:
+
+```
+grep "2026-10-29" sftp-transfer-logs/sftp-transfer-2026-10.log
+```
+
+A failed push is just as readable: the reason is logged in the same place, in order, instead
+of being lost with the panel.
 
 ## Installing this fork
 
