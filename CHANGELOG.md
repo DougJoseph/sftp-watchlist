@@ -4,18 +4,45 @@ A fork of Natizyskunk's SFTP extension, branched from release **1.16.3
 (2023-06-16)** and distributed as a `.vsix` from this repository's Releases and on the
 VS Code Marketplace. Extension id `DougJoseph.sftp-watchlist`.
 
-It differs from upstream in five ways:
+It differs from upstream in six ways:
 
 - a hook that runs before an upload begins,
 - a persistent on-disk transfer log,
 - `caseSensitivePatterns`, an opt-in that matches ignore/exclude patterns case-sensitively,
 - `hopKeysLocal`, an opt-in that reads every hop's private key from the local machine,
 - a fix for downloads failing on current VS Code with `isDate is not a function` — a defect
-  that affects the stock extension too.
+  that affects the stock extension too,
+- a fix for credentials inside `hop` entries and `profiles` printing unmasked in the Output
+  panel — a defect from the stock extension predating this fork.
 
 Everything below the horizontal rule is upstream history.
 
 ## Fork changes
+
+### 1.19.1 — 2026-11-18 — masking extended to credentials inside `hop` and `profiles`
+
+* **Credentials inside `hop` entries and profiles are now masked in the Output panel.** Each
+  time a config loads — when the window opens, and each time `sftp.json` is saved — the
+  extension prints the config to the Output panel. The stock extension masks `username`,
+  `password`, `passphrase` and `interactiveAuth` answers at the top level of a config, but
+  not inside a `hop` entry, an entry of a `hop` array, or a profile, and it still works that
+  way. This fork now masks them inside `hop` entries and profiles as well, at every depth,
+  including a hop inside a hop and a hop inside a profile. For this config:
+
+  ```jsonc
+  "hop": { "host": "203.0.113.10", "username": "siteuser", "password": "s3cret" }
+  ```
+
+  the stock extension prints `"hop":{"host":"203.0.113.10","username":"siteuser","password":"s3cret"}`;
+  this fork prints `"hop":{"host":"203.0.113.10","username":"******","password":"******"}`.
+  Nothing to configure.
+* **In this fork the line could also reach a file.** From 1.17.0 through 1.19.0, saving
+  `sftp.json` while an upload or sync was running wrote that reload's line into the running
+  operation's transfer log, on disk inside the project. With this fix that line carries no
+  credential at any depth.
+
+Files touched: `src/modules/serviceManager/index.ts` (`maskConfig`), `README.md`,
+`CHANGELOG.md` (upstream's issue 97 now links to upstream's repository rather than this one).
 
 ### 1.19.0 — 2026-11-17 — `hopKeysLocal`, and no `.DS_Store` in the package
 
@@ -187,7 +214,7 @@ accepts them without complaint).
 
 ## 1.15.20 - 2022-08-28
 * Fix typo 'worksapce' to 'workspace' (Pull request [#158](https://github.com/Natizyskunk/vscode-sftp/pull/158) from @NyaPPuu vscode-sftp:fix_typo).
-* Add `Download File` & `Downalod Folder` commands to the remote view (Thanks to @mrandrey on issue #97).
+* Add `Download File` & `Downalod Folder` commands to the remote view (Thanks to @mrandrey on issue [#97](https://github.com/Natizyskunk/vscode-sftp/issues/97)).
 * Update npm `types/fs-extra` depedency to v9.0.13 (Pull request [#204](https://github.com/Natizyskunk/vscode-sftp/pull/204) from @dependabot vscode-sftp:dependabot/npm_and_yarn/types/fs-extra-9.0.13).
 * Update npm `typescript-tslint-plugin` depedency to v1.0.2 (Pull request [#206](https://github.com/Natizyskunk/vscode-sftp/pull/206) from @dependabot vscode-sftp:dependabot/npm_and_yarn/typescript-tslint-plugin-1.0.2).
 * Update npm `tslint` depedency to v6.1.3 (Pull request [#207](https://github.com/Natizyskunk/vscode-sftp/pull/207) from @dependabot vscode-sftp:dependabot/npm_and_yarn/tslint-6.1.3).

@@ -18,9 +18,14 @@ const serviceManager = new Trie<FileService>(
   }
 );
 
+// FORK ADDITION (DougJoseph, 2026-11-18): also mask username, password,
+// passphrase and interactiveAuth inside `hop` entries and `profiles`.
 function maskConfig(config) {
   const copy = {};
   const MASK = '******';
+  const maskNested = value =>
+    value && typeof value === 'object' && !Array.isArray(value) ? maskConfig(value) : value;
+
   Object.keys(config).forEach(key => {
     const configValue = config[key];
     switch (key) {
@@ -32,6 +37,22 @@ function maskConfig(config) {
       case 'interactiveAuth':
         if (Array.isArray(configValue)) {
           copy[key] = configValue.map(phrase => MASK);
+        } else {
+          copy[key] = configValue;
+        }
+        break;
+      case 'hop':
+        copy[key] = Array.isArray(configValue)
+          ? configValue.map(maskNested)
+          : maskNested(configValue);
+        break;
+      case 'profiles':
+        if (configValue && typeof configValue === 'object' && !Array.isArray(configValue)) {
+          const maskedProfiles = {};
+          Object.keys(configValue).forEach(name => {
+            maskedProfiles[name] = maskNested(configValue[name]);
+          });
+          copy[key] = maskedProfiles;
         } else {
           copy[key] = configValue;
         }

@@ -9,7 +9,7 @@
 the **VS Code Marketplace** as `DougJoseph.sftp-watchlist` — or install the `.vsix` from
 [Releases](https://github.com/DougJoseph/sftp-watchlist/releases).
 
-It adds five things to the upstream extension:
+It adds six things to the upstream extension:
 
 1. **Fixes downloads, which are broken in the stock extension.** On current VS Code every
    download and remote → local sync fails there with `isDate is not a function`. Here they
@@ -31,6 +31,11 @@ It adds five things to the upstream extension:
 5. **Writes a permanent record of every transfer.** The Output panel clears and takes the
    history with it; the same lines also go to a monthly file in the project, so "what went
    to that server in August, and when" is still answerable months later.
+6. **Keeps the credentials inside `hop` and `profiles` out of the Output panel.** Every time
+   a config loads, the extension prints it there with the credentials replaced by `******` —
+   but the stock extension only does that at the top level, so a password written inside a
+   `hop` entry or a profile is printed in full. Here they are masked at every depth. Nothing
+   to configure.
 
 Everything else is upstream's, unchanged. The original README follows below the fork
 documentation.
@@ -425,8 +430,9 @@ the local folder the running config governs:
   filename rather than a search.
 - Written per config, so each project's transfers land in that project's own log.
 - Log lines carry a four-digit year, which the Output panel's own stamp omits.
-- Lines emitted outside an operation — activation, config loading — belong to no project
-  and stay panel-only.
+- Lines emitted outside an operation, such as at activation, belong to no project and stay
+  panel-only. A config reloaded while an operation is running is logged during it, so its
+  line lands in that operation's file.
 
 **⚠️ Add `/sftp-transfer-logs` to the `ignore` list of every `sftp.json` that uses this.**
 The folder sits inside a synced tree, so without that entry it would upload itself.
@@ -454,6 +460,59 @@ grep "2026-10-29" sftp-transfer-logs/sftp-transfer-2026-10.log
 
 A failed push is just as readable: the reason is logged in the same place, in order, instead
 of being lost with the panel.
+
+## Masked credentials in the printed config — the stock extension stops at the top level
+
+**Symptom.** Each time a config loads — when the window opens, and each time `sftp.json` is
+saved — the extension prints the whole config to the Output panel, with `username`,
+`password`, `passphrase` and `interactiveAuth` answers replaced by `******`. The stock
+extension masks them only at the top level of the config. Inside a `hop` entry, inside each
+entry of a `hop` array, and inside a profile, they are printed exactly as written. The stock
+extension still works that way.
+
+**A defect from the stock extension, predating this fork.** It is upstream's code, unchanged
+since v1.16.3.
+
+**The fix.** This fork masks the same four fields at every depth — a hop inside a hop, a hop
+inside a profile, a profile's own fields. Nothing else in the printed line changes: hosts,
+ports, paths and key paths still read as written, because that line is often read to check
+which key file a config is using.
+
+### Worked example
+
+**1. A config with a password inside its `hop`**, in `.vscode/sftp.json`:
+
+```jsonc
+{
+  "name": "site",
+  "remotePath": "/var/www/site",
+  "host": "jump.example.net",
+  "username": "jumpuser",
+  "privateKeyPath": "/Users/me/.ssh/id_jump",
+  "hop": {
+    "host": "203.0.113.10",
+    "username": "siteuser",
+    "password": "s3cret"
+  }
+}
+```
+
+**2. Reload the VS Code window**, then open the Output panel (`View > Output`, channel
+`sftp`) and find the line that begins `config at`. On the stock extension it ends (earlier
+settings shortened to `…`):
+
+```
+[info] config at /Users/me/site {…,"username":"******","privateKeyPath":"/Users/me/.ssh/id_jump","hop":{"host":"203.0.113.10","username":"siteuser","password":"s3cret"}}
+```
+
+On this fork, from 1.19.1:
+
+```
+[info] config at /Users/me/site {…,"username":"******","privateKeyPath":"/Users/me/.ssh/id_jump","hop":{"host":"203.0.113.10","username":"******","password":"******"}}
+```
+
+**3. To confirm it on your own configs**, look at the `hop` part of each `config at` line.
+Every `username`, `password` and `passphrase` there reads `******`.
 
 ## Installing this fork
 
